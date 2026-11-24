@@ -1,4 +1,4 @@
-import { FEES, REFUND_POLICY } from '../config/fees'
+import { FEES, REFUND_POLICY } from '../config/fees.js'
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)

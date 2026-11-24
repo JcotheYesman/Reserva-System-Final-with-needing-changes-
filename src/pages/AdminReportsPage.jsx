@@ -57,7 +57,7 @@ function AdminReportsPage() {
             <div className="border-b border-border px-4 py-3"><h2 className="text-sm font-bold">Facility registration report</h2></div>
             <Table columns={columns} rows={data.applications} rowKey="id" emptyMessage="No application records." caption="Facility registration report" />
           </Card>
-          <p className="text-[10px] leading-4 text-muted">Report values are mock data for this frontend prototype.</p>
+          <p className="text-[10px] leading-4 text-muted">Reports reflect current users, facilities, and owner applications.</p>
         </>
       ) : null}
     </div>

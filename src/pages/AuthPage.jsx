@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { authService } from '../services/authService'
+import { accountHomePath } from '../utils/accountRoutes'
 import './AuthPage.css'
 
 const authViews = {
@@ -19,6 +20,42 @@ const authViews = {
     subtitle: 'No worries. We’ll email you a link to get back in.',
     submit: 'Send recovery link',
   },
+}
+
+const socialAuthErrors = {
+  not_configured: 'This sign-in option is not set up yet. Please use email and password for now.',
+  callback_not_secure: 'Social sign-in needs a secure callback URL. Please contact the site administrator.',
+  cancelled: 'Sign-in was cancelled.',
+  account_not_found: 'Account not found. Please register first.',
+  account_already_registered: 'This Google account is already registered. Please log in instead.',
+  account_inactive: 'This account is currently unavailable. Contact the site administrator.',
+  account_conflict: 'This account could not be linked safely. Please sign in with email and password.',
+  provider_denied: 'The identity provider could not authorize this sign-in. Please try again.',
+  provider_unavailable: 'The sign-in provider could not be reached. Please try again.',
+  invalid_flow: 'This sign-in could not be matched to your browser. Please start again.',
+  expired_state: 'This sign-in request expired. Please start again.',
+  expired_ticket: 'This sign-in request expired. Please start again.',
+}
+
+let oauthFinishFlight = null
+
+function finishOAuthOnce(ticket, flowId, intent) {
+  const key = `${flowId}:${intent}:${ticket}`
+  if (oauthFinishFlight?.key === key) return oauthFinishFlight.promise
+
+  const promise = authService.completeSocialLogin(ticket, flowId, intent)
+  oauthFinishFlight = { key, promise }
+  promise.catch(() => {
+    if (oauthFinishFlight?.key === key) oauthFinishFlight = null
+  })
+  return promise
+}
+
+function oauthDestination(user, returnTo) {
+  const safeReturnTo = /^\/(choose-schedule|confirm-booking)(\?|$)/.test(returnTo)
+    ? returnTo
+    : '/dashboard'
+  return user.role === 'User' ? safeReturnTo : accountHomePath(user)
 }
 
 const fieldIcons = {
@@ -121,12 +158,17 @@ function AuthCheckbox({ children, checked, onChange }) {
   )
 }
 
-function SocialButtons() {
+function SocialButtons({ onSignIn, disabled }) {
   return (
     <>
       <div className="auth-divider"><span>or continue with</span></div>
       <div className="auth-social">
-        <button type="button" className="auth-social__button">
+        <button
+          type="button"
+          className="auth-social__button"
+          onClick={() => onSignIn('google')}
+          disabled={disabled}
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.4Z" />
             <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.2-2.5c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.9-4.2H2.8v2.6A10 10 0 0 0 12 22Z" />
@@ -135,12 +177,6 @@ function SocialButtons() {
           </svg>
           <span>Google</span>
         </button>
-        <button type="button" className="auth-social__button">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="M16.7 12.8c0-2 1.6-3 1.7-3.1a3.7 3.7 0 0 0-2.9-1.6c-1.2-.1-2.4.7-3.1.7-.6 0-1.6-.7-2.6-.7a3.9 3.9 0 0 0-3.3 2c-1.4 2.4-.4 6 1 8 .7 1 1.5 2 2.5 2 1 0 1.3-.6 2.5-.6s1.5.6 2.5.6c1 0 1.7-.9 2.4-1.9.8-1.1 1.1-2.2 1.1-2.3-.1 0-2-.8-2-3.1ZM14.7 6.8c.5-.7.9-1.6.8-2.5-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.8 2.4.9.1 1.8-.5 2.4-1.1Z" />
-          </svg>
-          <span>Apple</span>
-        </button>
       </div>
     </>
   )
@@ -148,18 +184,30 @@ function SocialButtons() {
 
 function passwordStrength(password) {
   if (!password) return 0
-  return [
-    password.length >= 8,
-    /[A-Z]/.test(password) && /[a-z]/.test(password),
-    /\d/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-  ].filter(Boolean).length
+  const lower = password.toLowerCase()
+  let score = 0
+  if (password.length >= 8) score += 1
+  if (password.length >= 12) score += 1
+  if (password.length >= 16) score += 1
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1
+  if (/\d/.test(password)) score += 1
+  if (/[^A-Za-z0-9]/.test(password)) score += 1
+  if (/(.)\1{2,}|1234|abcd|qwerty|password/.test(lower)) score = Math.max(0, score - 2)
+  return Math.min(4, Math.ceil(score / 1.5))
 }
 
 function AuthPage() {
   const { view: routeView } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const isOAuthCallback = routeView === 'callback'
+  const oauthResult = searchParams.get('result')
+  const oauthError = searchParams.get('error') || (oauthResult && oauthResult !== 'verified' ? oauthResult : '')
+  const oauthIntent = searchParams.get('intent') || ''
+  const oauthReturnTo = searchParams.get('returnTo') || '/dashboard'
+  const oauthFlowId = searchParams.get('flowId') || ''
+  const oauthTicket = searchParams.get('ticket') || ''
   const requestedReturnTo = location.state?.from
   const returnTo =
     typeof requestedReturnTo === 'string' &&
@@ -180,6 +228,55 @@ function AuthPage() {
   const [visiblePasswords, setVisiblePasswords] = useState({})
   const [keepLoggedIn, setKeepLoggedIn] = useState(true)
   const [rememberAccount, setRememberAccount] = useState(false)
+
+  useEffect(() => {
+    if (!isOAuthCallback || oauthResult !== 'verified') return undefined
+    let active = true
+    let finishAttempted = false
+    const intent = oauthIntent
+    Promise.resolve().then(async () => {
+      if (
+        !oauthTicket ||
+        !oauthFlowId ||
+        !['login', 'signup'].includes(intent) ||
+        window.sessionStorage.getItem('reserva.oauth.flow') !== oauthFlowId ||
+        window.sessionStorage.getItem('reserva.oauth.intent') !== intent
+      ) {
+        throw new Error('This sign-in did not start in this browser. Please try again.')
+      }
+      finishAttempted = true
+      const { user } = await finishOAuthOnce(oauthTicket, oauthFlowId, intent)
+      window.sessionStorage.removeItem('reserva.oauth.flow')
+      window.sessionStorage.removeItem('reserva.oauth.intent')
+      return user
+    }).then((user) => {
+        if (!active) return
+        if (!user) throw new Error('Sign-in could not be completed. Please try again.')
+        navigate(oauthDestination(user, oauthReturnTo), { replace: true })
+      })
+      .catch(async (error) => {
+        if (!active) return
+        if (finishAttempted) {
+          try {
+            const user = await authService.getSession()
+            if (!active) return
+            if (user) {
+              window.sessionStorage.removeItem('reserva.oauth.flow')
+              window.sessionStorage.removeItem('reserva.oauth.intent')
+              navigate(oauthDestination(user, oauthReturnTo), { replace: true })
+              return
+            }
+          } catch {
+            // Display the original completion error below.
+          }
+        }
+        if (active) {
+          const code = error instanceof Error ? error.message : ''
+          setMessage(socialAuthErrors[code] || code || 'Sign-in could not be completed. Please try again.')
+        }
+      })
+    return () => { active = false }
+  }, [isOAuthCallback, navigate, oauthFlowId, oauthIntent, oauthResult, oauthReturnTo, oauthTicket])
 
   const updateValue = (field) => (event) => {
     setValues((current) => ({ ...current, [field]: event.target.value }))
@@ -225,11 +322,12 @@ function AuthPage() {
         })
         navigate(returnTo, { replace: true })
       } else if (view === 'login') {
-        await authService.login({
+        const result = await authService.login({
           email: values.email.trim(),
           password: values.password,
         })
-        navigate(returnTo, { replace: true })
+        const destination = result.user?.role === 'User' ? returnTo : accountHomePath(result.user)
+        navigate(destination, { replace: true })
       } else {
         const result = await authService.recover({ email: values.email.trim() })
         setRecoverySent(true)
@@ -242,8 +340,56 @@ function AuthPage() {
     }
   }
 
+  function handleSocialSignIn(provider) {
+    setMessage('')
+    setIsSubmitting(true)
+    try {
+      authService.startSocialLogin(provider, returnTo, view)
+    } catch (error) {
+      setIsSubmitting(false)
+      setMessage(error instanceof Error ? error.message : 'Unable to start social sign-in.')
+    }
+  }
+
   const strength = passwordStrength(values.password)
+  const strengthLabel = values.password
+    ? ['Weak', 'Weak', 'Fair', 'Good', 'Strong'][strength]
+    : 'empty'
   const recoveryComplete = view === 'recovery' && recoverySent
+
+  if (isOAuthCallback) {
+    const callbackError = message || socialAuthErrors[oauthError] || 'Sign-in could not be verified. Please try again.'
+    const isFinishing = oauthResult === 'verified' && !message
+    const flowIntentMatches = typeof window !== 'undefined' && oauthIntent &&
+      window.sessionStorage.getItem('reserva.oauth.intent') === oauthIntent
+    const offerRegistration = oauthError === 'account_not_found' && oauthIntent === 'login' && flowIntentMatches
+    const offerLogin = oauthError === 'account_already_registered' && oauthIntent === 'signup' && flowIntentMatches
+    const callbackReturnTo = /^\/(choose-schedule|confirm-booking)(\?|$)/.test(oauthReturnTo)
+      ? oauthReturnTo
+      : undefined
+    return (
+      <div className="auth-content">
+        <header className="auth-heading">
+          <h1>{isFinishing ? 'Finishing sign-in' : 'Social sign-in'}</h1>
+          <p>{isFinishing ? 'Your account is being verified.' : callbackError}</p>
+        </header>
+        {isFinishing ? (
+          <p className="auth-message" role="status" aria-live="polite">Please wait…</p>
+        ) : (
+          <p className="auth-message" role="alert" aria-live="polite">{callbackError}</p>
+        )}
+        {!isFinishing ? (
+          offerRegistration ? (
+            <Link to="/auth/signup" state={{ from: callbackReturnTo }} className="auth-primary-link">Register instead</Link>
+          ) : offerLogin ? (
+            <Link to="/auth/login" state={{ from: callbackReturnTo }} className="auth-primary-link">Log in instead</Link>
+          ) : (
+            <Link to="/auth/login" state={{ from: callbackReturnTo }} className="auth-primary-link">Back to log in</Link>
+          )
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <div className="auth-content">
@@ -338,13 +484,13 @@ function AuthPage() {
               <>
                 <div
                   className={`auth-strength auth-strength--${strength}`}
-                  aria-label={`Password strength: ${['empty', 'weak', 'fair', 'good', 'strong'][strength]}`}
+                  aria-label={`Password strength: ${strengthLabel.toLowerCase()}`}
                   aria-live="polite"
                 >
                   <div className="auth-strength__bars" aria-hidden="true">
                     {[1, 2, 3, 4].map((bar) => <span key={bar} className={bar <= strength ? 'filled' : ''} />)}
                   </div>
-                  <span>{values.password ? ['Weak', 'Weak', 'Fair', 'Good', 'Strong'][strength] : 'Use 8+ characters for a strong password'}</span>
+                  <span>{values.password ? strengthLabel : 'Use 8+ characters for a strong password'}</span>
                 </div>
                 <AuthField
                   id="confirmPassword"
@@ -391,7 +537,7 @@ function AuthPage() {
             </button>
           </form>
 
-          {view !== 'recovery' ? <SocialButtons /> : null}
+          {view !== 'recovery' ? <SocialButtons onSignIn={handleSocialSignIn} disabled={isSubmitting} /> : null}
           {view === 'recovery' ? (
             <p className="auth-recovery-return">
               Remember your password? <Link to="/auth/login" state={{ from: location.state?.from }} className="auth-text-link">Log in</Link>

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import BrandLogo from './BrandLogo'
 
 const navigationItems = [
@@ -6,10 +6,12 @@ const navigationItems = [
   { label: 'Sports Facilities', to: '/sports-facilities' },
   { label: 'Reserved Schedule', to: '/reserved-schedule' },
   { label: 'Reservation History', to: '/reservation-history' },
-  { label: 'My Friends', to: '/my-friends' },
 ]
 
 function Sidebar({ open = false, onNavigate }) {
+  const location = useLocation()
+  const isBookingRoute = ['/choose-schedule', '/confirm-booking'].includes(location.pathname)
+
   return (
     <>
       {open ? (
@@ -37,7 +39,7 @@ function Sidebar({ open = false, onNavigate }) {
               onClick={onNavigate}
               className={({ isActive }) =>
                 `block rounded px-3 py-2 text-sm transition-colors ${
-                  isActive
+                  isActive || (item.to === '/sports-facilities' && isBookingRoute)
                     ? 'bg-success/10 font-semibold text-success'
                     : 'text-muted hover:bg-surface hover:text-text'
                 }`

@@ -1,97 +1,45 @@
-import { friends, notifications, reviews, userProfile } from '../data/mockData'
-
-const wait = (value) =>
-  new Promise((resolve) => {
-    setTimeout(() => resolve(value), 160)
-  })
-
-let currentProfile = { ...userProfile, preferredSports: [...userProfile.preferredSports] }
-let currentFriends = friends.map((friend, index) => ({ ...friend, id: index + 1 }))
-let currentNotifications = notifications.map((notification) => ({ ...notification }))
-let currentReviews = reviews.map((review) => ({ ...review }))
+import { api } from './api'
 
 export const userService = {
   async getProfile() {
-    return wait({ ...currentProfile, preferredSports: [...currentProfile.preferredSports] })
+    return (await api('profile.get')).data
   },
-
   async saveProfile(profile) {
-    currentProfile = { ...currentProfile, ...profile }
-    return wait({ ...currentProfile, preferredSports: [...currentProfile.preferredSports] })
+    const saved = (await api('profile.save', { method: 'POST', body: profile })).data
+    window.dispatchEvent(new Event('reserva:profile-changed'))
+    window.dispatchEvent(new Event('reserva:notifications-changed'))
+    return saved
   },
-
-  async getFriends() {
-    return wait([...currentFriends])
+  async getSports() {
+    return (await api('sports.list')).data
   },
-
-  async addFriend(friend) {
-    const added = {
-      id: Date.now(),
-      name: friend.name.trim(),
-      sport: friend.sport.trim(),
-      status: 'Offline',
-      actions: ['Message', 'Remove'],
-    }
-    currentFriends = [added, ...currentFriends]
-    return wait(added)
-  },
-
-  async removeFriend(id) {
-    currentFriends = currentFriends.filter((friend) => friend.id !== id)
-    return wait(true)
-  },
-
   async getNotifications() {
-    return wait([...currentNotifications])
+    return (await api('notifications.list')).data
   },
-
+  async markNotificationRead(id) {
+    const result = (await api('notifications.read', { method: 'POST', body: { id } })).data
+    window.dispatchEvent(new Event('reserva:notifications-changed'))
+    return result
+  },
   async addNotification(notification) {
-    if (!notification?.title?.trim() || !notification?.message?.trim()) {
-      throw new Error('A notification title and message are required.')
-    }
-    const created = {
-      id: `N-${Date.now()}`,
-      title: notification.title.trim(),
-      message: notification.message.trim(),
-      time: 'Just now',
-      unread: true,
-      type: notification.type ?? 'info',
-    }
-    currentNotifications = [created, ...currentNotifications]
-    return wait({ ...created })
+    if (!notification?.title?.trim() || !notification?.message?.trim()) throw new Error('A notification title and message are required.')
+    const created = (await api('notifications.create', { method: 'POST', body: notification })).data
+    window.dispatchEvent(new Event('reserva:notifications-changed'))
+    return created
   },
-
   async markAllNotificationsRead() {
-    currentNotifications = currentNotifications.map((notification) => ({
-      ...notification,
-      unread: false,
-    }))
-    return wait([...currentNotifications])
+    await api('notifications.read-all', { method: 'POST', body: {} })
+    window.dispatchEvent(new Event('reserva:notifications-changed'))
+    return true
   },
-
   async getReviews() {
-    return wait([...currentReviews])
+    return (await api('reviews.list')).data
   },
-
   async submitReview(review) {
-    const submitted = { id: Date.now(), user: currentProfile.name, ...review }
-    currentReviews = [submitted, ...currentReviews]
-    return wait(submitted)
+    return (await api('reviews.create', { method: 'POST', body: review })).data
   },
-
   async sendFacilityMessage(payload) {
-    return wait({
-      ok: true,
-      message: `Your message was sent to facility ${payload.facilityId}.`,
-      sent: { ...payload },
-    })
-  },
-
-  async sendFriendMessage(payload) {
-    return wait({
-      ok: true,
-      message: `Your message was sent to ${payload.friendName}.`,
-      sent: { ...payload },
-    })
+    await api('inquiries.create', { method: 'POST', body: payload })
+    return { ok: true, message: `Your message was sent to facility ${payload.facilityId}.` }
   },
 }

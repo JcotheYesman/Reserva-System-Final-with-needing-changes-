@@ -1,7 +1,7 @@
 const tones = {
   neutral: 'bg-border/40 text-muted',
   success: 'bg-success/15 text-success',
-  pending: 'bg-accent/15 text-accent',
+  pending: 'bg-yellow-500/15 text-yellow-400',
   danger: 'bg-danger/15 text-danger',
   info: 'bg-info/15 text-info',
 }

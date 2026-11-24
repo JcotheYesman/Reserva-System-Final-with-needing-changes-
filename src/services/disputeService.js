@@ -1,23 +1,22 @@
-import { disputeSeed } from '../data/paymentData'
-import { auditLogService } from './auditLogService'
+import { api, apiState } from './api'
 import { payoutService } from './payoutService'
 import { reservationService } from './reservationService'
 import { settingsService } from './settingsService'
+import { userService } from './userService'
 
-const DISPUTES_KEY = 'reserva.reservation.disputes'
-const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(value), 150))
+const DISPUTES_KEY = 'disputes'
+const delay = (value) => value
 
-function readDisputes() {
-  const saved = window.localStorage.getItem(DISPUTES_KEY)
-  return saved ? JSON.parse(saved) : disputeSeed.map((dispute) => ({ ...dispute }))
+async function readDisputes() {
+  return (await apiState.get(DISPUTES_KEY)) ?? []
 }
 
-function saveDisputes(disputes) {
-  window.localStorage.setItem(DISPUTES_KEY, JSON.stringify(disputes))
+async function saveDisputes(disputes) {
+  await apiState.put(DISPUTES_KEY, disputes)
 }
 
 export const disputeService = {
-  async createDispute({ reservationId, userId = 'user-demo', user = 'Player', reason, details }) {
+  async createDispute({ reservationId, reason, details }) {
     if (!reason?.trim() || !details?.trim()) {
       throw new Error('Choose a reason and describe the problem.')
     }
@@ -31,16 +30,17 @@ export const disputeService = {
     if (!isDisputeEligible(reservation, settings.refundPolicy.disputeWindowHours)) {
       throw new Error('The dispute window for this reservation has ended.')
     }
-    const disputes = readDisputes()
-    if (disputes.some((dispute) => dispute.reservationId === reservationId && dispute.status === 'Open')) {
-      throw new Error('There is already an open dispute for this reservation.')
+    const profile = await userService.getProfile()
+    const disputes = await readDisputes()
+    if (disputes.some((dispute) => Number(dispute.reservationId) === Number(reservationId))) {
+      throw new Error('A problem report has already been submitted for this reservation.')
     }
     const dispute = {
-      id: `DSP-${Date.now()}`,
+      id: `DSP-${crypto.randomUUID()}`,
       reservationId,
-      userId,
-      user,
-      ownerId: reservation.ownerId ?? 'owner-demo',
+      userId: profile.id,
+      user: profile.name,
+      ownerId: reservation.ownerId ?? null,
       facility: reservation.name,
       reservationSnapshot: {
         id: reservation.id,
@@ -62,63 +62,43 @@ export const disputeService = {
       reason: reason.trim(),
       details: details.trim(),
       status: 'Open',
+      ownerResponse: null,
+      ownerResponseStatus: 'Awaiting owner response',
       createdAt: new Date().toISOString(),
     }
-    saveDisputes([dispute, ...disputes])
+    await saveDisputes([dispute, ...disputes])
     await payoutService.holdEarningForDispute(reservationId, true)
+    await api('dispute.created', { method: 'POST', body: { id: dispute.id, reservationId: dispute.reservationId } })
     return delay({ ...dispute })
   },
 
   async getDisputes(status = '') {
-    return delay(readDisputes()
-      .filter((dispute) => !status || dispute.status === status)
-      .map((dispute) => ({ ...dispute })))
+    const disputes = (await api('dispute.list')).data ?? []
+    return delay(disputes.filter((dispute) => !status || dispute.status === status))
   },
 
-  async resolveDispute(id, { action, amount, note, actor = 'admin' } = {}) {
+  async getDisputeDetails(id) {
+    return (await api('dispute.details', { params: { id } })).data
+  },
+
+  async addEvidence(id, side, evidence) {
+    return (await api('dispute.evidence.add', {
+      method: 'POST',
+      body: { id, side, evidenceId: evidence.id, description: evidence.description, image: evidence.data, name: evidence.name },
+    })).data
+  },
+
+  async submitOwnerResponse(id, details) {
+    return (await api('owner.dispute.respond', { method: 'POST', body: { id, details } })).data
+  },
+
+  async resolveDispute(id, { action, amount, note } = {}) {
     if (!note?.trim()) throw new Error('Add a note before resolving this dispute.')
     if (!['full-refund', 'partial-refund', 'reject'].includes(action)) {
       throw new Error('Choose a valid dispute resolution.')
     }
-    const disputes = readDisputes()
-    const index = disputes.findIndex((dispute) => dispute.id === id)
-    if (index < 0) throw new Error('Dispute not found.')
-    if (disputes[index].status !== 'Open') throw new Error('This dispute has already been resolved.')
-    const dispute = disputes[index]
-    let refund = null
-
-    if (action === 'full-refund') {
-      const result = await reservationService.cancelReservation(dispute.reservationId, 'admin', note)
-      refund = result.refund
-    } else if (action === 'partial-refund') {
-      refund = await reservationService.refundReservation(dispute.reservationId, {
-        amount,
-        cancelledBy: 'admin',
-        reason: note,
-      })
-    } else {
-      await payoutService.holdEarningForDispute(dispute.reservationId, false)
-    }
-
-    const resolved = {
-      ...dispute,
-      status: 'Resolved',
-      resolution: action,
-      resolutionNote: note.trim(),
-      resolvedBy: actor,
-      resolvedAt: new Date().toISOString(),
-      refund: refund ? { ...refund } : null,
-    }
-    disputes[index] = resolved
-    saveDisputes(disputes)
-    await auditLogService.add({
-      action: `dispute-${action}`,
-      actor,
-      targetId: dispute.reservationId,
-      note,
-      details: { disputeId: id, amount: refund?.totalRefunded ?? 0 },
-    })
-    return delay({ ...resolved })
+    const resolved = (await api('admin.dispute.resolve', { method: 'POST', body: { id, resolution: action, amount, note } })).data
+    return resolved
   },
 }
 

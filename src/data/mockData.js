@@ -3,7 +3,6 @@ export const navItems = [
   { label: 'Sports Facilities', path: '/sports-facilities' },
   { label: 'Reserved Schedule', path: '/reserved-schedule' },
   { label: 'Reservation History', path: '/reservation-history' },
-  { label: 'My Friends', path: '/my-friends' },
 ]
 
 export const authCards = [

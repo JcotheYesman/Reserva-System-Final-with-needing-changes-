@@ -4,8 +4,8 @@ import MoneyCell from './MoneyCell'
 function BalanceCards({ balance }) {
   const cards = [
     { label: 'Available balance', amount: balance.available, detail: 'From completed bookings; available to withdraw' },
-    { label: 'Pending balance', amount: balance.pending, detail: 'Bookings not yet completed or under dispute' },
-    { label: 'Total earned', amount: balance.earned, detail: 'Net earnings after commission and refunds' },
+    { label: 'Pending balance', amount: balance.pending, detail: 'Bookings awaiting release or held during dispute review' },
+    { label: 'Total earned', amount: balance.earned, detail: 'Net earnings from completed bookings after commission and refunds' },
     { label: 'Total withdrawn', amount: balance.withdrawn, detail: 'Net payouts received' },
   ]
 

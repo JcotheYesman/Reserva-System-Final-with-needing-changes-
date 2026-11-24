@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandLogo from '../components/BrandLogo'
 import Select from '../components/ui/Select'
+import useAsyncResource from '../hooks/useAsyncResource'
+import { facilityService } from '../services/facilityService'
 
 function LandingPage() {
   const navigate = useNavigate()
   const [sport, setSport] = useState('All')
   const [location, setLocation] = useState('')
+  const sportsLoader = useCallback(() => facilityService.getSports(), [])
+  const { data: sports } = useAsyncResource(sportsLoader)
 
   function handleSearch(event) {
     event.preventDefault()
@@ -20,7 +24,7 @@ function LandingPage() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(58,58,58,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(58,58,58,0.3)_1px,transparent_1px)] bg-[size:44px_44px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]" />
       </div>
       <header className="relative z-10 flex h-16 items-center justify-between px-5 sm:px-10">
-        <BrandLogo className="brand-logo--large" />
+        <BrandLogo to="/guest" className="brand-logo--large" />
         <nav className="flex items-center gap-2">
           <Link
             to="/auth/login"
@@ -67,7 +71,7 @@ function LandingPage() {
               label="Sport"
               value={sport}
               onChange={(event) => setSport(event.target.value)}
-              options={['All', 'Football', 'Basketball', 'Tennis', 'Badminton', 'Volleyball', 'Swimming']}
+              options={['All', ...(sports ?? []).map((item) => item.name)]}
               className="h-10"
             />
             <button

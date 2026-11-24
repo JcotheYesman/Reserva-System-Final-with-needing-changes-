@@ -208,11 +208,11 @@
   background: rgb(255 255 255 / 15%);
 }
 
-.auth-strength--1 .filled,
-.auth-strength--2 .filled {
+.auth-strength--1 .filled {
   background: #ff6868;
 }
 
+.auth-strength--2 .filled,
 .auth-strength--3 .filled {
   background: #ffc14f;
 }
@@ -381,7 +381,7 @@
 
 .auth-social {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -403,6 +403,11 @@
 .auth-social__button:hover {
   border-color: rgb(255 255 255 / 31%);
   background: rgb(255 255 255 / 8%);
+}
+
+.auth-social__button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .auth-social__button svg {

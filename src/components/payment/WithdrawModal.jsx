@@ -13,7 +13,6 @@ function WithdrawModal({
   payoutSchedule,
   accounts,
   onAddAccount,
-  onVerifyAccount,
   onWithdraw,
   submitting,
 }) {
@@ -22,12 +21,13 @@ function WithdrawModal({
   const [accountType, setAccountType] = useState('GCash')
   const [accountName, setAccountName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
-  const [verificationCodes, setVerificationCodes] = useState({})
+  const [accountPassword, setAccountPassword] = useState('')
   const [error, setError] = useState('')
   const [accountBusy, setAccountBusy] = useState(false)
 
-  const verifiedAccounts = accounts.filter((account) => account.verified)
-  const unverifiedAccounts = accounts.filter((account) => !account.verified)
+  const accountStatus = (account) => account.verificationStatus ?? (account.verified ? 'Verified' : 'Pending review')
+  const verifiedAccounts = accounts.filter((account) => account.verified && accountStatus(account) === 'Verified')
+  const unverifiedAccounts = accounts.filter((account) => !account.verified || accountStatus(account) !== 'Verified')
   const amountToWithdraw = payoutSchedule === 'weekly' ? balance.available : Number(amount)
   const calculation = useMemo(
     () => calculateWithdrawal(amountToWithdraw, balance.available, fees),
@@ -40,28 +40,17 @@ function WithdrawModal({
     setAccountBusy(true)
     setError('')
     try {
-      const account = await onAddAccount({
+      await onAddAccount({
         type: accountType,
         name: accountName,
         number: accountNumber,
+        password: accountPassword,
       })
-      setVerificationCodes((current) => ({ ...current, [account.id]: '' }))
+      setAccountPassword('')
       setAccountName('')
       setAccountNumber('')
     } catch (accountError) {
       setError(accountError instanceof Error ? accountError.message : 'Payout account could not be added.')
-    } finally {
-      setAccountBusy(false)
-    }
-  }
-
-  async function verifyAccount(account) {
-    setAccountBusy(true)
-    setError('')
-    try {
-      await onVerifyAccount(account.id, verificationCodes[account.id] ?? '')
-    } catch (verificationError) {
-      setError(verificationError instanceof Error ? verificationError.message : 'Payout account could not be verified.')
     } finally {
       setAccountBusy(false)
     }
@@ -85,15 +74,17 @@ function WithdrawModal({
     }
   }
 
+  function closeModal() {
+    if (submitting || accountBusy) return
+    setAccountPassword('')
+    setError('')
+    onClose()
+  }
+
   return (
     <Modal
       open={open}
-      onClose={() => {
-        if (!submitting && !accountBusy) {
-          setError('')
-          onClose()
-        }
-      }}
+      onClose={closeModal}
       title="Withdraw earnings"
     >
       <div className="space-y-5">
@@ -153,32 +144,18 @@ function WithdrawModal({
             ]}
           />
         ) : (
-          <p role="status" className="text-sm text-muted">Withdrawal is unavailable until a payout account is verified.</p>
+          <p role="status" className="text-sm text-muted">Withdrawal stays unavailable until an administrator approves a payout destination.</p>
         )}
 
         {unverifiedAccounts.map((account) => (
           <div key={account.id} className="rounded-md border border-border p-3">
             <p className="text-sm font-semibold">{account.type} ···· {account.number.slice(-4)}</p>
-            <p className="mt-1 text-xs text-muted">Account holder: {account.name}. Verification code for this mock flow: 123456.</p>
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              <Input
-                label="Verification code"
-                value={verificationCodes[account.id] ?? ''}
-                onChange={(event) => setVerificationCodes((current) => ({
-                  ...current,
-                  [account.id]: event.target.value,
-                }))}
-                inputMode="numeric"
-                maxLength={6}
-              />
-              <Button
-                variant="secondary"
-                disabled={accountBusy || submitting || !verificationCodes[account.id]}
-                onClick={() => verifyAccount(account)}
-              >
-                Verify account
-              </Button>
-            </div>
+            <p className="mt-1 text-xs text-muted">Account holder: {account.name}</p>
+            <p className={`mt-2 text-xs font-semibold ${accountStatus(account) === 'Rejected' ? 'text-danger' : 'text-amber-300'}`}>
+              {accountStatus(account)}
+            </p>
+            {account.reviewNote ? <p className="mt-1 text-xs text-muted">Admin note: {account.reviewNote}</p> : null}
+            {accountStatus(account) === 'Pending review' ? <p className="mt-1 text-xs text-muted">An administrator will review this payout destination. You’ll be notified when it is approved or rejected.</p> : null}
           </div>
         ))}
 
@@ -204,15 +181,24 @@ function WithdrawModal({
               inputMode="numeric"
               required
             />
+            <Input
+              label="RESERVA account password"
+              type="password"
+              value={accountPassword}
+              onChange={(event) => setAccountPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+            />
+            <p className="text-[11px] text-muted">Confirm your RESERVA password to submit this payout destination for admin review. The password is checked against your account and is not saved with the payout details.</p>
             <Button type="submit" disabled={accountBusy || submitting}>
-              {accountBusy ? 'Saving…' : 'Add account'}
+              {accountBusy ? 'Submitting…' : 'Submit for admin review'}
             </Button>
           </form>
         </details>
 
         {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
         <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button variant="secondary" disabled={submitting || accountBusy} onClick={onClose}>Close</Button>
+          <Button variant="secondary" disabled={submitting || accountBusy} onClick={closeModal}>Close</Button>
           <Button
             disabled={
               submitting || accountBusy || !hasVerifiedAccounts || !accountId ||

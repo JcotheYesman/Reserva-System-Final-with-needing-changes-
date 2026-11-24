@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import AsyncState from '../components/ui/AsyncState'
 import Card from '../components/ui/Card'
 import PageHeading from '../components/ui/PageHeading'
 import CalendarGrid from '../components/calendar/CalendarGrid'
 import ScheduleList from '../components/calendar/ScheduleList'
 import SportLegend from '../components/calendar/SportLegend'
+import useAsyncResource from '../hooks/useAsyncResource'
+import { facilityService } from '../services/facilityService'
 import useCalendar from '../hooks/useCalendar'
 import { buildMonthGrid, formatCalendarDate } from '../utils/calendar'
 
@@ -17,7 +19,10 @@ function OwnerCalendarPage() {
   const [selectedDate, setSelectedDate] = useState(() =>
     formatCalendarDate(initialToday.getFullYear(), initialToday.getMonth(), initialToday.getDate()),
   )
+  const sportsLoader = useCallback(() => facilityService.getSports(), [])
+  const { data: sports, reload: reloadSports } = useAsyncResource(sportsLoader)
   const { bookingsByDate, schedule, isLoading, error, reload } = useCalendar(year, month, selectedDate)
+  const sportColors = useMemo(() => Object.fromEntries((sports ?? []).map((sport) => [sport.name, sport.color])), [sports])
   const days = useMemo(() => buildMonthGrid(year, month), [year, month])
   const todayDate = formatCalendarDate(initialToday.getFullYear(), initialToday.getMonth(), initialToday.getDate())
   const selected = new Date(`${selectedDate}T00:00:00`)
@@ -82,10 +87,11 @@ function OwnerCalendarPage() {
                 selectedDate={selectedDate}
                 todayDate={todayDate}
                 onSelectDate={selectDate}
+                sportColors={sportColors}
               />
             </Card>
             <Card className="rounded-lg p-4">
-              <SportLegend />
+              <SportLegend sports={sports ?? []} onColorSaved={reloadSports} />
             </Card>
           </div>
           <Card className="rounded-lg p-4">

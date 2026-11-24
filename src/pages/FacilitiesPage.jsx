@@ -1,20 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AsyncState from '../components/ui/AsyncState'
+import FacilityArtwork from '../components/facility/FacilityArtwork'
 import PageHeading from '../components/ui/PageHeading'
 import Select from '../components/ui/Select'
 import useAsyncResource from '../hooks/useAsyncResource'
 import { facilityService } from '../services/facilityService'
-
-const categories = ['All', 'Football', 'Basketball', 'Tennis', 'Badminton', 'Volleyball', 'Swimming']
-const visuals = {
-  Football: 'from-red-700 to-red-950',
-  Basketball: 'from-orange-600 to-amber-950',
-  Tennis: 'from-green-600 to-emerald-950',
-  Badminton: 'from-blue-600 to-indigo-950',
-  Volleyball: 'from-fuchsia-700 to-purple-950',
-  Swimming: 'from-cyan-600 to-blue-950',
-}
 
 function FacilitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -25,8 +16,17 @@ function FacilitiesPage() {
     () => facilityService.searchFacilities({ query, category }),
     [query, category],
   )
+  const sportsLoader = useCallback(() => facilityService.getSports(), [])
   const { data, isLoading, error, reload } = useAsyncResource(loader)
+  const { data: sports } = useAsyncResource(sportsLoader)
   const facilities = data ?? []
+  const categories = ['All', ...(sports ?? []).map((sport) => sport.name)]
+
+  useEffect(() => {
+    if (sports && category !== 'All' && !sports.some((sport) => sport.name === category)) {
+      setSearchParams({ q: query, category: 'All' })
+    }
+  }, [category, query, setSearchParams, sports])
 
   function updateFilters(nextQuery, nextCategory) {
     setSearchParams({ q: nextQuery, category: nextCategory })
@@ -65,25 +65,32 @@ function FacilitiesPage() {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {facilities.map((facility) => (
             <article key={facility.id} className="overflow-hidden rounded-card border border-border bg-surface">
-              <div className={`flex h-32 items-center justify-center bg-gradient-to-br ${visuals[facility.sport] ?? 'from-sidebar to-bg'}`}>
-                <span className="text-3xl font-black tracking-widest text-white/70">{facility.sport.slice(0, 2).toUpperCase()}</span>
-              </div>
+              <FacilityArtwork facility={facility} />
               <div className="space-y-3 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h2 className="text-sm font-bold text-text">{facility.name}</h2>
-                    <p className="mt-1 text-xs text-muted">{facility.sport}</p>
+                    <p className="mt-1 text-xs text-muted">{facility.sport}{facility.active ? '' : ' · Under maintenance'}</p>
+                    {facility.equipmentRental ? <span className="mt-2 inline-flex rounded-full border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-semibold text-accent">Equipment rental available</span> : null}
                   </div>
                   <span className="whitespace-nowrap text-sm font-bold text-accent">{facility.price}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-xs text-success">{facility.availability} available</span>
-                  <Link
-                    to={`/choose-schedule?facility=${facility.id}`}
-                    className="rounded bg-accent px-3 py-2 text-xs font-bold text-white hover:brightness-110"
-                  >
-                    Book this court
-                  </Link>
+                  <span className={`text-xs ${facility.active && facility.courtCount > 0 ? 'text-success' : 'text-muted'}`}>
+                    {!facility.active ? 'View only · booking unavailable' : facility.courtCount > 0 ? `${facility.availability} available` : 'No courts configured'}
+                  </span>
+                  {facility.active && facility.courtCount > 0 ? (
+                    <Link
+                      to={`/choose-schedule?facility=${facility.id}`}
+                      className="rounded bg-accent px-3 py-2 text-xs font-bold text-white hover:brightness-110"
+                    >
+                      Book this court
+                    </Link>
+                  ) : (
+                    <span className="rounded border border-border px-3 py-2 text-xs font-semibold text-muted">
+                      Unavailable
+                    </span>
+                  )}
                 </div>
               </div>
             </article>

@@ -13,7 +13,7 @@ function CancelModal({
   onConfirm,
 }) {
   const totalRefunded = Number(preview?.totalRefunded ?? 0)
-  const cancellationDeduction = Math.max(0, Number(preview?.userTotal ?? 0) - totalRefunded)
+  const retainedAmount = Number(preview?.retainedAmount ?? preview?.retainedDeposit ?? 0)
 
   return (
     <Modal open={Boolean(reservation)} onClose={onClose} title="Cancel reservation">
@@ -27,14 +27,12 @@ function CancelModal({
             <>
               <FeeBreakdown rows={[
                 { label: 'Court rate', value: formatPHP(preview.courtRate) },
-                { label: 'Service fee (non-refundable)', value: formatPHP(preview.serviceFeeNonRefundable) },
-                { label: 'Court rate refund', value: formatPHP(preview.courtRateRefund) },
-                { label: 'Cancellation deduction', value: formatPHP(cancellationDeduction) },
+                { label: 'Service fee refund', value: formatPHP(preview.serviceFeeRefund ?? 0) },
+                { label: 'Court rate refund', value: formatPHP(preview.courtRateRefund ?? 0) },
+                { label: 'Paid amount retained', value: formatPHP(retainedAmount) },
                 { label: 'You will be refunded', value: formatPHP(totalRefunded), emphasis: true },
               ]} />
-              <p className="mt-2 text-xs leading-5 text-muted">
-                Refund to {reservation.paymentMethod ?? 'your original payment method'} · 3–7 business days.
-              </p>
+              {totalRefunded > 0 ? <p className="mt-2 text-xs leading-5 text-muted">The refund will be recorded as pending until it is processed and confirmed. No refund is sent automatically by this system.</p> : null}
               <p className="mt-1 text-xs leading-5 text-muted">{preview.reason}</p>
             </>
           ) : null}

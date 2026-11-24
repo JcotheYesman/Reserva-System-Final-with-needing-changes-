@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import BrandLogo from '../components/BrandLogo'
+import Topbar from '../components/Topbar'
 
 const links = [
   { label: 'Dashboard', to: '/admin' },
@@ -16,7 +17,6 @@ const links = [
 
 function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const navigate = useNavigate()
   const closeMenu = () => setMenuOpen(false)
 
   return (
@@ -28,7 +28,7 @@ function AdminLayout() {
         <aside aria-label="Admin navigation" className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-sidebar transition-transform md:static md:z-auto md:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="flex h-14 items-center justify-between border-b border-border px-4">
             <BrandLogo className="brand-logo--small" />
-            <span className="rounded bg-accent/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-accent">Admin</span>
+            <span className="rounded bg-info/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-info">Admin</span>
           </div>
           <div className="border-b border-border px-4 py-4">
             <p className="text-sm font-semibold">RESERVA Admin</p>
@@ -41,26 +41,22 @@ function AdminLayout() {
                 to={link.to}
                 end={link.to === '/admin'}
                 onClick={closeMenu}
-                className={({ isActive }) => `block rounded px-3 py-2 text-sm transition-colors ${isActive ? 'bg-accent/10 font-semibold text-accent' : 'text-muted hover:bg-surface hover:text-text'}`}
+                className={({ isActive }) => `block rounded px-3 py-2 text-sm transition-colors ${isActive ? 'bg-info/10 font-semibold text-info' : 'text-muted hover:bg-surface hover:text-text'}`}
               >
                 {link.label}
               </NavLink>
             ))}
           </nav>
-          <button type="button" onClick={() => { closeMenu(); navigate('/') }} className="border-t border-border px-5 py-3 text-left text-xs text-muted transition-colors hover:text-text">
-            Back to RESERVA
-          </button>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 items-center justify-between gap-3 border-b border-border bg-bg px-3 sm:px-5">
-            <div className="flex items-center gap-3">
-              <button type="button" aria-label="Open admin navigation" onClick={() => setMenuOpen(true)} className="rounded p-1.5 text-muted hover:bg-surface hover:text-text md:hidden">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-              </button>
-              <span className="text-xs text-muted">Platform administration</span>
-            </div>
-            <button type="button" onClick={() => navigate('/')} className="text-xs font-semibold text-muted hover:text-text">View player site</button>
-          </header>
+          <Topbar
+            homePath="/admin"
+            notificationsPath="/admin/notifications"
+            profilePath="/admin/profile"
+            profileLabel="Admin Profile"
+            adminAccent
+            onMenuClick={() => setMenuOpen(true)}
+          />
           <main className="flex-1 p-3 sm:p-5"><Outlet /></main>
         </div>
       </div>

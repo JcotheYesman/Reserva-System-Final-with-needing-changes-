@@ -15,8 +15,8 @@ function OwnerApplicationPage() {
     <main className="min-h-screen bg-bg px-4 py-5 text-text sm:px-8 sm:py-8">
       <div className="mx-auto max-w-3xl">
         <header className="flex items-center justify-between gap-3">
-          <BrandLogo className="brand-logo--large" />
-          <Link to="/" className="text-xs font-semibold text-muted hover:text-text">Back to player site</Link>
+          <BrandLogo to="/guest" className="brand-logo--large" />
+          <Link to="/guest" className="text-xs font-semibold text-muted hover:text-text">Back to Guestpage</Link>
         </header>
         <div className="mx-auto mt-12 max-w-xl">
           <AsyncState loading={isLoading} error={error} onRetry={reload} />
@@ -51,7 +51,7 @@ function ApplicationStatus({ application }) {
       </h1>
       <p className="mt-2 text-sm leading-6 text-muted">
         {approved
-          ? 'Your listing is ready. You can now manage facilities, bookings, and availability.'
+          ? 'Your facility listings are ready. You can now manage facilities, bookings, and availability.'
           : needsChanges
             ? application.reviewNote ?? 'Please review the requested changes and update your application.'
             : 'Thanks for applying to list your facility on RESERVA. We’ll review your business and listing details before enabling owner tools.'}
@@ -59,13 +59,18 @@ function ApplicationStatus({ application }) {
       <dl className="mt-5 divide-y divide-border rounded-md border border-border bg-bg px-3">
         <StatusRow label="Application ID" value={application.id} />
         <StatusRow label="Submitted" value={new Date(application.submittedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })} />
-        <StatusRow label="Business" value={application.business.name} />
-        <StatusRow label="First facility" value={application.facility.name} />
+        <StatusRow label="Business" value={application.business?.name ?? application.businessName ?? 'Business details unavailable'} />
+        <StatusRow
+          label={application.facilities?.length > 1 ? `Facilities (${application.facilities.length})` : 'Facility'}
+          value={application.facilities?.length
+            ? application.facilities.map((facility) => facility.name).join(', ')
+            : application.facility?.name ?? 'Facility details unavailable'}
+        />
         <StatusRow label="Status" value={application.status} />
       </dl>
       {application.status === 'Pending review' ? (
         <div className="mt-4 rounded-md border border-info/30 bg-info/10 p-3 text-xs leading-5 text-muted">
-          Your owner dashboard stays locked while the application is pending. You can safely close this page; your application status is saved in this browser.
+          Your owner dashboard stays locked while the application is pending. You can safely close this page; your application status is saved in the RESERVA database.
         </div>
       ) : null}
       <div className="mt-5 flex flex-wrap gap-2">
@@ -79,14 +84,14 @@ function ApplicationStatus({ application }) {
           </Link>
         ) : null}
         <Link
-          to="/"
+          to="/guest"
           className="inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold text-text"
         >
-          Back to player site
+          Back to Guestpage
         </Link>
       </div>
       <p className="mt-5 text-[10px] leading-4 text-muted">
-        This prototype uses local mock status. Application review, email verification, and business document checks require backend support.
+        Application status is stored in the database. Email verification and business document checks are not configured.
       </p>
     </Card>
   )

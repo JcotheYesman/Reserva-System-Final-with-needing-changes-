@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AsyncState from '../components/ui/AsyncState'
 import Button from '../components/ui/Button'
@@ -7,30 +7,42 @@ import PageHeading from '../components/ui/PageHeading'
 import Select from '../components/ui/Select'
 import StarRating from '../components/ui/StarRating'
 import useAsyncResource from '../hooks/useAsyncResource'
-import { facilityService } from '../services/facilityService'
+import { reservationService } from '../services/reservationService'
 import { userService } from '../services/userService'
 
 function FeedbackPage() {
   const [searchParams] = useSearchParams()
-  const [facilityId, setFacilityId] = useState(searchParams.get('facility') ?? '1')
+  const [reservationId, setReservationId] = useState(searchParams.get('reservation') ?? '')
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const loader = useCallback(async () => {
-    const [facilities, reviews] = await Promise.all([
-      facilityService.getFacilities(),
+    const [reservations, reviews, profile] = await Promise.all([
+      reservationService.getReservedSchedule(),
       userService.getReviews(),
+      userService.getProfile(),
     ])
-    return { facilities, reviews }
+    const reviewedIds = new Set(reviews.filter((review) => Number(review.userId) === Number(profile.id)).map((review) => String(review.reservationId)))
+    const eligibleReservations = reservations.filter((reservation) => reservation.status === 'Completed' && !reviewedIds.has(String(reservation.id)))
+    return { reservations, reviews, profile, eligibleReservations }
   }, [])
   const { data, isLoading, error, reload } = useAsyncResource(loader)
+  const selectedReservation = useMemo(() => data?.eligibleReservations.find((item) => String(item.id) === String(reservationId)), [data, reservationId])
+  const reservationOptions = (data?.eligibleReservations ?? []).map((reservation) => ({
+    value: String(reservation.id),
+    label: `${reservation.name} · ${reservation.date} · ${reservation.time}`,
+  }))
 
   async function submitFeedback(event) {
     event.preventDefault()
     setErrorMessage('')
     setSuccessMessage('')
+    if (!selectedReservation) {
+      setErrorMessage('Choose a completed reservation before submitting a review.')
+      return
+    }
     if (!rating) {
       setErrorMessage('Choose a star rating before submitting.')
       return
@@ -42,12 +54,14 @@ function FeedbackPage() {
     setIsSubmitting(true)
     try {
       await userService.submitReview({
-        facility: data.facilities.find((item) => String(item.id) === facilityId)?.name ?? 'Facility',
+        reservationId: Number(selectedReservation.id),
+        facilityId: Number(selectedReservation.facilityId),
         rating,
         text: comment.trim(),
       })
       setComment('')
       setRating(0)
+      setReservationId('')
       setSuccessMessage('Thanks for sharing your feedback.')
       reload()
     } catch (submitError) {
@@ -59,35 +73,27 @@ function FeedbackPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
-      <PageHeading title="Feedback & Ratings" description="Tell other players about your experience." />
+      <PageHeading title="Feedback & Ratings" description="Review a facility after your completed reservation." />
       <AsyncState loading={isLoading} error={error} onRetry={reload} />
       {data ? (
         <>
           <Card>
             <form onSubmit={submitFeedback} className="space-y-4">
-              <Select
-                label="Facility"
-                value={facilityId}
-                onChange={(event) => setFacilityId(event.target.value)}
-                options={data.facilities.map((facility) => ({ value: String(facility.id), label: facility.name }))}
-              />
-              <fieldset>
+              {reservationOptions.length ? (
+                <Select label="Completed reservation" value={reservationId} onChange={(event) => setReservationId(event.target.value)} options={[{ value: '', label: 'Choose a completed booking' }, ...reservationOptions]} />
+              ) : <p className="rounded-md border border-border bg-bg px-3 py-3 text-sm text-muted">You can submit a review after a confirmed booking has ended. Each completed reservation can be reviewed once.</p>}
+              {selectedReservation ? <p className="text-xs text-muted">Reviewing <strong className="text-text">{selectedReservation.name}</strong> · {selectedReservation.date} · {selectedReservation.time}</p> : null}
+              <fieldset disabled={!selectedReservation || isSubmitting}>
                 <legend className="mb-2 text-xs font-medium text-muted">Your rating</legend>
                 <StarRating value={rating} onChange={setRating} label="Select a rating from one to five stars" />
               </fieldset>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-medium text-muted">Your review</span>
-                <textarea
-                  rows="4"
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  placeholder="What did you like about this facility?"
-                  className="w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm text-text placeholder:text-muted"
-                />
+                <textarea rows="4" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="What was your experience at this facility?" disabled={!selectedReservation || isSubmitting} className="w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm text-text placeholder:text-muted" />
               </label>
               {errorMessage ? <p role="alert" className="text-sm text-danger">{errorMessage}</p> : null}
               {successMessage ? <p role="status" className="text-sm text-success">{successMessage}</p> : null}
-              <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting…' : 'Submit review'}</Button>
+              <Button type="submit" disabled={!selectedReservation || isSubmitting}>{isSubmitting ? 'Submitting…' : 'Submit review'}</Button>
             </form>
           </Card>
           <section className="space-y-3">
@@ -103,9 +109,7 @@ function FeedbackPage() {
                 </div>
                 <p className="mt-3 text-sm leading-6 text-muted">{review.text}</p>
               </Card>
-            )) : (
-              <Card><p className="text-sm text-muted">No reviews yet.</p></Card>
-            )}
+            )) : <Card><p className="text-sm text-muted">No reviews yet.</p></Card>}
           </section>
         </>
       ) : null}

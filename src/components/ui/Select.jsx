@@ -32,7 +32,7 @@ function Select({
         {...props}
       >
         {options.map((option) => (
-          <option key={option.value ?? option} value={option.value ?? option}>
+          <option key={option.value ?? option} value={option.value ?? option} disabled={option.disabled}>
             {option.label ?? option}
           </option>
         ))}

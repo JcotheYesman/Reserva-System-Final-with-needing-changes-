@@ -9,6 +9,8 @@ import Table from '../components/ui/Table'
 import useAsyncResource from '../hooks/useAsyncResource'
 import { ownerService } from '../services/ownerService'
 
+const statusTone = { Confirmed: 'success', Pending: 'pending', Cancelled: 'danger', Completed: 'success' }
+
 function OwnerDashboardPage() {
   const loader = useCallback(() => ownerService.getDashboard(), [])
   const { data, isLoading, error, reload } = useAsyncResource(loader)
@@ -17,11 +19,21 @@ function OwnerDashboardPage() {
     { key: 'customer', label: 'Customer' },
     { key: 'facility', label: 'Facility' },
     { key: 'date', label: 'Date' },
-    { key: 'time', label: 'Time' },
+    {
+      key: 'time',
+      label: 'Time',
+      render: (row) => row.courtSchedules?.length ? (
+        <div className="min-w-36 space-y-1 text-xs">
+          {row.courtSchedules.map((court, index) => (
+            <p key={court.courtId ?? index}>Court {court.courtNumber ?? index + 1}: {court.startTime} - {court.endTime}</p>
+          ))}
+        </div>
+      ) : row.time,
+    },
     {
       key: 'status',
       label: 'Status',
-      render: (row) => <Badge tone={row.status === 'Confirmed' ? 'success' : row.status === 'Pending' ? 'pending' : 'danger'}>{row.status}</Badge>,
+      render: (row) => <Badge tone={statusTone[row.status] ?? 'neutral'}>{row.status}</Badge>,
     },
     { key: 'total', label: 'Total', className: 'text-right font-semibold text-accent' },
   ]
@@ -53,11 +65,10 @@ function OwnerDashboardPage() {
               caption="Recent reservations"
             />
           </Card>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {[
               { title: 'Update facility listings', text: 'Keep your facility name, sport, rate, and listing status current.', to: '/owner/facilities', action: 'Manage facilities' },
               { title: 'Review booking requests', text: 'Confirm or decline reservations waiting for your response.', to: '/owner/requests', action: 'View requests' },
-              { title: 'Set availability', text: 'Open or close time slots so players see current availability.', to: '/owner/availability', action: 'Manage schedule' },
             ].map((item) => (
               <Card key={item.to}>
                 <h2 className="text-sm font-bold">{item.title}</h2>

@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import AsyncState from '../components/ui/AsyncState'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -10,7 +11,9 @@ import { facilityService } from '../services/facilityService'
 import { userService } from '../services/userService'
 
 function MessagePage() {
-  const [facilityId, setFacilityId] = useState('1')
+  const [searchParams] = useSearchParams()
+  const [facilityId, setFacilityId] = useState(searchParams.get('facility') ?? '')
+  const [category, setCategory] = useState('Booking')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
@@ -18,6 +21,13 @@ function MessagePage() {
   const [isSending, setIsSending] = useState(false)
   const loader = useCallback(() => facilityService.getFacilities(), [])
   const { data, isLoading, error, reload } = useAsyncResource(loader)
+  const selectedFacility = data?.find((facility) => String(facility.id) === String(facilityId))
+
+  useEffect(() => {
+    if (data?.length && !data.some((facility) => String(facility.id) === String(facilityId))) {
+      setFacilityId(String(data[0].id))
+    }
+  }, [data, facilityId])
 
   async function sendMessage(event) {
     event.preventDefault()
@@ -31,6 +41,7 @@ function MessagePage() {
     try {
       const result = await userService.sendFacilityMessage({
         facilityId: Number(facilityId),
+        category,
         subject: subject.trim(),
         message: message.trim(),
       })
@@ -56,6 +67,13 @@ function MessagePage() {
               value={facilityId}
               onChange={(event) => setFacilityId(event.target.value)}
               options={data.map((facility) => ({ value: String(facility.id), label: facility.name }))}
+            />
+            {selectedFacility ? <p className="-mt-2 text-xs text-muted">Facility contact: <strong className="text-text">{selectedFacility.ownerName || 'Facility owner'}</strong></p> : null}
+            <Select
+              label="Problem category"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              options={['Booking', 'Payment', 'Facility maintenance', 'Safety', 'Staff', 'Other']}
             />
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-muted">Subject</span>

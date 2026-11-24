@@ -1,6 +1,4 @@
-import { SPORT_COLORS } from '../../data/calendarData'
-
-function DayCell({ day, year, month, bookings, selected, today, onSelect }) {
+function DayCell({ day, year, month, bookings, selected, today, onSelect, sportColors = {} }) {
   const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   const visibleBookings = bookings.filter((booking) => ['Confirmed', 'Pending'].includes(booking.status))
   const visibleDots = visibleBookings.slice(0, 4)
@@ -31,7 +29,7 @@ function DayCell({ day, year, month, bookings, selected, today, onSelect }) {
           <span
             key={`${booking.sport}-${index}`}
             className={`h-1.5 w-1.5 rounded-full md:h-2 md:w-2 ${index === 3 ? 'hidden md:inline-block' : ''}`}
-            style={{ backgroundColor: SPORT_COLORS[booking.sport] ?? 'var(--color-muted)' }}
+            style={{ backgroundColor: sportColors[booking.sport] ?? 'var(--color-muted)' }}
           />
         ))}
         {mobileOverflow > 0 ? (

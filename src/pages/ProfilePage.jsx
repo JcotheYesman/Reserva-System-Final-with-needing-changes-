@@ -2,24 +2,45 @@ import { useCallback, useState } from 'react'
 import AsyncState from '../components/ui/AsyncState'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import ProfilePictureCropModal from '../components/ProfilePictureCropModal'
 import PageHeading from '../components/ui/PageHeading'
 import useAsyncResource from '../hooks/useAsyncResource'
 import { userService } from '../services/userService'
 
-const sports = ['Football', 'Basketball', 'Tennis', 'Badminton', 'Volleyball', 'Swimming']
+function normalizeProfile(value) {
+  if (!value || typeof value !== 'object') return null
+  return {
+    ...value,
+    name: typeof value.name === 'string' ? value.name : '',
+    email: typeof value.email === 'string' ? value.email : '',
+    phone: typeof value.phone === 'string' ? value.phone : '',
+    profilePicture: typeof value.profilePicture === 'string' ? value.profilePicture : null,
+    preferredSports: Array.isArray(value.preferredSports) ? value.preferredSports.filter((sport) => typeof sport === 'string') : [],
+  }
+}
 
 function ProfilePage() {
-  const loader = useCallback(() => userService.getProfile(), [])
+  const loader = useCallback(async () => {
+    const [profile, sports] = await Promise.all([userService.getProfile(), userService.getSports()])
+    return { profile, sports }
+  }, [])
   const { data, isLoading, error, reload } = useAsyncResource(loader)
   const [form, setForm] = useState(null)
   const [formError, setFormError] = useState('')
   const [saved, setSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const profile = form ?? data
+  const [isCropOpen, setIsCropOpen] = useState(false)
+  const [pictureWasSaved, setPictureWasSaved] = useState(false)
+  const [savedPicture, setSavedPicture] = useState(undefined)
+  const profile = normalizeProfile(form ?? data?.profile)
+  const sports = (Array.isArray(data?.sports) ? data.sports : [])
+    .map((sport) => typeof sport === 'string' ? sport : sport?.name)
+    .filter((sport) => typeof sport === 'string' && sport.trim() !== '')
 
   function updateField(field, value) {
-    setForm((current) => ({ ...(current ?? data), [field]: value }))
+    setForm((current) => ({ ...(normalizeProfile(current ?? data?.profile) ?? {}), [field]: value }))
     setSaved(false)
+    setPictureWasSaved(false)
     setFormError('')
   }
 
@@ -43,9 +64,13 @@ function ProfilePage() {
     setIsSaving(true)
     setFormError('')
     setSaved(false)
+    setPictureWasSaved(false)
     try {
-      await userService.saveProfile(profile)
-      setForm(profile)
+      const previousPicture = savedPicture === undefined ? (data?.profile?.profilePicture ?? null) : savedPicture
+      const updatedProfile = await userService.saveProfile(profile)
+      setSavedPicture(updatedProfile.profilePicture ?? null)
+      setForm(updatedProfile)
+      setPictureWasSaved((profile.profilePicture ?? null) !== previousPicture)
       setSaved(true)
     } catch (saveError) {
       setFormError(saveError instanceof Error ? saveError.message : 'Your profile could not be saved.')
@@ -61,14 +86,28 @@ function ProfilePage() {
       {profile ? (
         <form onSubmit={saveProfile} className="grid gap-4 lg:grid-cols-[250px_1fr]">
           <Card className="flex flex-col items-center text-center">
-            <div className="grid h-20 w-20 place-items-center rounded-full border-2 border-success bg-success/15 text-2xl font-bold text-success">
-              {profile.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
+            <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border-2 border-success bg-success/15 text-2xl font-bold text-success">
+              {profile.profilePicture ? (
+                <img src={profile.profilePicture} alt={`${profile.name}'s profile`} className="h-full w-full object-cover" />
+              ) : (
+                profile.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+              )}
             </div>
             <h2 className="mt-3 text-sm font-bold">{profile.name}</h2>
             <p className="mt-1 text-xs text-muted">{profile.email}</p>
-            <span className="mt-3 inline-flex items-center gap-1.5 text-xs text-success">
-              <i className="h-1.5 w-1.5 rounded-full bg-success" /> Active account
+            <span className={`mt-3 inline-flex items-center gap-1.5 text-xs ${profile.onlineStatus === 'Online' ? 'text-success' : 'text-muted'}`}>
+              <i className={`h-1.5 w-1.5 rounded-full ${profile.onlineStatus === 'Online' ? 'bg-success' : 'bg-muted'}`} />
+              {profile.onlineStatus === 'Online' ? 'Online' : 'Offline'}
             </span>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isSaving}
+              onClick={() => setIsCropOpen(true)}
+              className="mt-4"
+            >
+              Change Profile Picture
+            </Button>
           </Card>
           <Card>
             <h2 className="border-b border-border pb-3 text-sm font-bold">Personal Information</h2>
@@ -104,13 +143,24 @@ function ProfilePage() {
               </div>
             </fieldset>
             {formError ? <p role="alert" className="mt-4 text-sm text-danger">{formError}</p> : null}
-            {saved ? <p role="status" className="mt-4 text-sm text-success">Profile changes saved.</p> : null}
+            {saved ? (
+              <p role="status" className="mt-4 text-sm text-success">
+                {pictureWasSaved ? 'Profile picture updated successfully. ' : ''}Profile changes saved.
+              </p>
+            ) : null}
             <div className="mt-4 border-t border-border pt-4">
               <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save Changes'}</Button>
             </div>
           </Card>
         </form>
       ) : null}
+      <ProfilePictureCropModal
+        open={isCropOpen}
+        onClose={() => setIsCropOpen(false)}
+        onApply={(picture) => {
+          updateField('profilePicture', picture)
+        }}
+      />
     </div>
   )
 }

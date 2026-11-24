@@ -1,33 +1,40 @@
-import { facilities, timeslots } from '../data/mockData'
-
-const wait = (value) =>
-  new Promise((resolve) => {
-    setTimeout(() => resolve(value), 160)
-  })
+import { api } from './api'
 
 export const facilityService = {
+  async getSports() {
+    return (await api('sports.list')).data
+  },
+  async createSport(name) {
+    return (await api('sports.create', { method: 'POST', body: { name } })).data
+  },
+  async updateSport(id, name) {
+    return (await api('sports.update', { method: 'POST', body: { id, name } })).data
+  },
+  async deleteSport(id) {
+    return api('sports.delete', { method: 'POST', body: { id } })
+  },
+  async updateSportColor(id, color) {
+    return (await api('sports.color.update', { method: 'POST', body: { id, color } })).data
+  },
+  async getAmenities() {
+    return (await api('amenities.list')).data
+  },
   async getFacilities() {
-    return wait([...facilities])
+    return (await api('facilities.list')).data
   },
-
   async searchFacilities({ query = '', category = 'All' } = {}) {
-    const normalizedQuery = query.trim().toLowerCase()
-    return wait(
-      facilities.filter((facility) => {
-        const matchesCategory = category === 'All' || facility.sport === category
-        const matchesQuery =
-          !normalizedQuery ||
-          `${facility.name} ${facility.sport}`.toLowerCase().includes(normalizedQuery)
-        return matchesCategory && matchesQuery
-      }),
-    )
+    return (await api('facilities.list', { params: { query, category } })).data
   },
-
   async getFacilityById(id) {
-    return wait(facilities.find((item) => item.id === Number(id)))
+    return (await api('facilities.get', { params: { id } })).data
   },
-
-  async getAvailability() {
-    return wait(timeslots.map((slot) => ({ ...slot })))
+  async getAvailability(facilityId, date, excludeReservationId, manage = false) {
+    return (await api('facilities.availability', { params: { facilityId, date, excludeReservationId, manage: manage ? 1 : undefined } })).data
+  },
+  async updateAvailability({ facilityId, courtNumber, date, changes, blockDate = false, reason = '' }) {
+    return (await api('facilities.availability.update', {
+      method: 'POST',
+      body: { facilityId, courtNumber, date, changes, blockDate, reason },
+    })).data
   },
 }

@@ -1,23 +1,39 @@
-import { calendarMonthData, scheduleByDate } from '../data/calendarData'
+import { api } from './api'
 
-const wait = (value) =>
-  new Promise((resolve) => {
-    setTimeout(() => resolve(value), 140)
-  })
+async function allReservations() {
+  const result = await api('reservations.list')
+  return Array.isArray(result.data) ? result.data : []
+}
+
+function calendarBooking(reservation) {
+  return {
+    id: reservation.id,
+    user: reservation.user || 'Customer',
+    facility: reservation.name,
+    sport: reservation.sport ?? '',
+    courtNames: Array.isArray(reservation.courtNames) ? reservation.courtNames : [],
+    courtSchedules: Array.isArray(reservation.courtSchedules) ? reservation.courtSchedules : [],
+    quantity: Number(reservation.quantity ?? 1),
+    startTime: reservation.startTime,
+    endTime: reservation.endTime,
+    time: reservation.time,
+    status: reservation.status,
+  }
+}
 
 export const reservationsService = {
   async getCalendarMonth(year, month) {
     const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`
-    const entries = Object.entries(calendarMonthData)
-      .filter(([date]) => date.startsWith(prefix))
-      .map(([date, bookings]) => [
-        date,
-        bookings.map((booking) => ({ ...booking })),
-      ])
-    return wait(Object.fromEntries(entries))
+    const bookings = (await allReservations()).filter((reservation) => String(reservation.date).startsWith(prefix))
+    return bookings.reduce((byDate, reservation) => {
+      byDate[reservation.date] ??= []
+      byDate[reservation.date].push(calendarBooking(reservation))
+      return byDate
+    }, {})
   },
-
   async getScheduleByDate(date) {
-    return wait((scheduleByDate[date] ?? []).map((booking) => ({ ...booking })))
+    return (await allReservations())
+      .filter((reservation) => reservation.date === date)
+      .map(calendarBooking)
   },
 }

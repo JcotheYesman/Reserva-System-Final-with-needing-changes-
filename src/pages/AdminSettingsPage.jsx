@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import AsyncState from '../components/ui/AsyncState'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import AdminPromoCodesModal from '../components/payment/AdminPromoCodesModal'
 import Input from '../components/ui/Input'
 import PageHeading from '../components/ui/PageHeading'
 import Select from '../components/ui/Select'
@@ -31,6 +32,7 @@ function AdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [notice, setNotice] = useState('')
+  const [showPromoCodes, setShowPromoCodes] = useState(false)
 
   const current = form ?? data
 
@@ -131,11 +133,13 @@ function AdminSettingsPage() {
 
           {saveError ? <p role="alert" className="text-sm text-danger">{saveError}</p> : null}
           {notice ? <p role="status" className="text-sm text-success">{notice}</p> : null}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button type="button" variant="secondary" onClick={() => setShowPromoCodes(true)}>Generate Promo Code</Button>
             <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save settings'}</Button>
           </div>
         </form>
       ) : null}
+      <AdminPromoCodesModal open={showPromoCodes} onClose={() => setShowPromoCodes(false)} />
     </div>
   )
 }
